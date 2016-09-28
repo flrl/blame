@@ -21,6 +21,15 @@ sub commit_colour
 open(my $blame, '-|', 'git', 'blame', @ARGV)
     or die "cannot exec git blame: $!";
 
+my $pager = $ENV{GIT_PAGER} // $ENV{PAGER};
+if (-t STDOUT and $pager) {
+    $ENV{LESS} //= 'FRSX';
+
+    open(my $out, '|-', $pager)
+        or die "cannot exec $pager: $!";
+    select $out;
+}
+
 while (<$blame>) {
     my ($sha1, $desc, $space, $lineno, $line) = split /\s\((.*?)(\s+)(\d+)\)/, $_, 2;
 
