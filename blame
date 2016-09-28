@@ -28,6 +28,6 @@ while (<$blame>) {
 
     print ansic(commit_colour($commit)), $commit, ansic(0);
     print $space;
-    print ansic(37), $lineno, ") ", ansic(0);
+    print ansic(37), $lineno, ')', ansic(0);
     print $line;
 }
