@@ -1,0 +1,15 @@
+#!/usr/bin/env perl
+# a wrapper for git-blame that distinctly colourises commit annotations
+
+use warnings;
+use strict;
+
+open(my $blame, '-|', 'git', 'blame', @ARGV)
+    or die "cannot exec git blame: $!";
+
+while (<$blame>) {
+    my ($commit, $line) = split /\)/, $_, 2;
+    print $commit;
+    print ')';
+    print $line;
+}
