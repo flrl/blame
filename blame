@@ -4,12 +4,30 @@
 use warnings;
 use strict;
 
+use B qw(hash);
+
+sub ansic
+{
+    return "\033["
+           . join(';', map { int $_ } @_)
+           . 'm';
+}
+
+sub commit_colour
+{
+    my ($commit) = @_;
+
+    return (38, 5, 16 + hex(hash($commit)) % 216);
+}
+
 open(my $blame, '-|', 'git', 'blame', @ARGV)
     or die "cannot exec git blame: $!";
 
 while (<$blame>) {
-    my ($commit, $line) = split /\)/, $_, 2;
-    print $commit;
-    print ')';
+    my ($commit, $space, $lineno, $line) = split /(\s+)(\d+)\)/, $_, 2;
+
+    print ansic(commit_colour($commit)), $commit, ansic(0);
+    print $space;
+    print ansic(37), $lineno, ") ", ansic(0);
     print $line;
 }
