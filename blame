@@ -15,10 +15,10 @@ sub commit_colour
 {
     my ($sha1) = @_;
 
-    return (38, 5, 17 + hex($sha1) % 214);
+    return (38, 5, 17 + hex(substr($sha1, 0, 8)) % 214);
 }
 
-open(my $blame, '-|', 'git', 'blame', @ARGV)
+open(my $blame, '-|', 'git', 'blame', '--line-porcelain', @ARGV)
     or die "cannot exec git blame: $!";
 
 my $pager = $ENV{GIT_PAGER} // $ENV{PAGER};
@@ -30,11 +30,35 @@ if (-t STDOUT and $pager) {
     select $out;
 }
 
-while (<$blame>) {
-    my ($sha1, $desc, $space, $lineno, $line) = split /\s\((.*?)(\s+)(\d+)\)/, $_, 2;
+#6d635f6c0b883b418fba3ce20637b20f95e1bddf 2 2
+#author flrl
+#author-mail <flrl@users.noreply.github.com>
+#author-time 1475047449
+#author-tz +1000
+#committer flrl
+#committer-mail <flrl@users.noreply.github.com>
+#committer-time 1475047449
+#committer-tz +1000
+#summary pipe, parse, print
+#previous 906dcbcde82d7cc1a670af2286f612c1f6f2d6da blame
+#filename blame
+#	# a wrapper for git-blame that distinctly colourises commit annotations
 
-    print ansic(commit_colour($sha1)), "$sha1 ($desc", ansic(0);
-    print $space;
-    print ansic(38,5,240), $lineno, ')', ansic(0);
+while (not eof($blame)) {
+    my ($sha1, undef, $lineno) = split /\s/, <$blame>;
+    my $line = <$blame>;
+    my %meta;
+    until ($line =~ m/^\t/) {
+        print "line: $line\n";
+        my ($k, $v) = split /\s/, $line, 2;
+        $meta{$k} = $v;
+        $line = <$blame>;
+    } 
+
+    substr $line, 0, 1, q{};
+    substr $sha1, 8, -1, q{};
+
+    print ansic(commit_colour($sha1)), "$sha1 ($meta{author} $meta{'author-time'}", ansic(0);
+    print ansic(38,5,240), " $lineno)", ansic(0);
     print $line;
 }
