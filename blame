@@ -15,7 +15,7 @@ sub commit_colour
 {
     my ($sha1) = @_;
 
-    return (38, 5, 16 + hex($sha1) % 216);
+    return (38, 5, 17 + hex($sha1) % 214);
 }
 
 open(my $blame, '-|', 'git', 'blame', @ARGV)
