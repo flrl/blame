@@ -31,9 +31,9 @@ if (-t STDOUT and $pager) {
 }
 
 while (<$blame>) {
-    my ($sha1, $desc, $space, $lineno, $line) = split /\s\((.*?)(\s+)(\d+)\)/, $_, 2;
+    my ($sha1, $desc, $space, $lineno, $line) = split /\s(.*?)(\s+)(\d+)\)/, $_, 2;
 
-    print ansic(commit_colour($sha1)), "$sha1 ($desc", ansic(0);
+    print ansic(commit_colour($sha1)), "$sha1 $desc", ansic(0);
     print $space;
     print ansic(38,5,240), $lineno, ')', ansic(0);
     print $line;
