@@ -15,7 +15,8 @@ sub commit_colour
 {
     my ($sha1) = @_;
 
-    return (38, 5, 17 + hex($sha1) % 214);
+    no warnings 'portable'; # quiet 64 bit ints please
+    return (38, 5, 17 + hex(substr($sha1, 0, 16)) % 214);
 }
 
 open(my $blame, '-|', 'git', 'blame', @ARGV)
