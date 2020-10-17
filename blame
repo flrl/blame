@@ -20,6 +20,26 @@ sub commit_colour
     return (38, 5, 17 + hex(substr($sha1, $c0, 16)) % 214);
 }
 
+sub tag_colour
+{
+    my ($tag) = @_;
+
+    # djb2
+    my $hash = 5381;
+    foreach my $c (split q{}, $tag) {
+        $hash = ($hash * 33 + ord $c) % 4294967296;
+    }
+
+    return (38, 5, 17 + $hash % 214);
+}
+
+my ($want_tags, $tag_pattern) = ();
+if ($ARGV[0] =~ m/^--tags(?:=(.*))?$/) {
+    $want_tags = 1;
+    $tag_pattern = $1 // q{};
+    shift @ARGV;
+}
+
 open(my $blame, '-|', 'git', 'blame', @ARGV)
     or die "cannot exec git blame: $!";
 
@@ -32,13 +52,38 @@ if (-t STDOUT and $pager) {
     select $out;
 }
 
+my %tagcache;
 while (<$blame>) {
     my ($sha1, $author, $date, $space, $lineno, $line) =
         split /\s\((.*?)\s*(\d\d\d\d-\d\d-\d\d \d\d:\d\d:\d\d [-+]\d\d\d\d)(\s+)(\d+)\)/, $_, 2;
 
+    my $tag;
+
+    if ($want_tags) {
+        $tag = $tagcache{$sha1};
+        if (not defined $tag) {
+            if ($sha1 !~ m/^0+$/) {
+                ($tag) = qx(git tag -l $tag_pattern --sort=v:refname --contains $sha1);
+                $tag //= q{};
+                chomp $tag;
+                $tagcache{$sha1} = $tag;
+            }
+            else {
+                # won't be able to find tags for uncommitted lines...
+                $tagcache{$sha1} = $tag = q{};
+            }
+        }
+    }
+
     print ansic(commit_colour($sha1));
     printf "$sha1 %-19.19s $date", $author;
     print ansic(0);
+
+    if ($want_tags) {
+        print ansic(tag_colour($tag));
+        printf ' %-19.19s', $tag;
+        print ansic(0);
+    }
 
     print $space;
     print ansic(38,5,240), $lineno, ')', ansic(0);
