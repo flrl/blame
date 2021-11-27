@@ -35,7 +35,19 @@ sub tag_colour
     return (38, 5, 17 + $hash % 214);
 }
 
-open(my $blame, '-|', 'git', 'blame', @ARGV)
+my %tagcache;
+
+open(my $gtpipe, '-|',
+        'git', 'tag', '-l', '--format=%(objectname) %(refname:lstrip=2)')
+    or die "cannot exec git tag: $!";
+while (<$gtpipe>) {
+    chomp;
+    my ($sha1, $tag) = split /\s+/, $_, 2;
+    $tagcache{$sha1} = $tag;
+}
+close $gtpipe;
+
+open(my $blame, '-|', 'git', 'blame', '--abbrev=40', @ARGV)
     or die "cannot exec git blame: $!";
 
 my $pager = $ENV{GIT_PAGER} // $ENV{PAGER};
@@ -47,7 +59,6 @@ if (-t STDOUT and $pager) {
     select $out;
 }
 
-my %newtagcache;
 my $sha1len;
 while (<$blame>) {
     my ($sha1, $author, $date, $space, $lineno, $line) =
@@ -55,25 +66,11 @@ while (<$blame>) {
 
     $sha1len //= length $sha1;
 
-    my ($committag);
+    my $tag = $tagcache{$sha1} // q{};
 
-    $committag = $newtagcache{$sha1};
-    if (not defined $committag) {
-        if ($sha1 !~ m/^0+$/) {
-            ($committag) = qx(git tag --points-at $sha1);
-            $committag //= q{};
-            chomp $committag;
-            $newtagcache{$sha1} = $committag;
-        }
-        else {
-            # won't be able to find tags for uncommitted lines...
-            $newtagcache{$sha1} = $committag = q{};
-        }
-    }
-
-    if ($committag) {
-        print ansic(tag_colour($committag));
-        printf "%-*.*s %-19.19s $date", $sha1len, $sha1len, $committag, $author;
+    if ($tag) {
+        print ansic(tag_colour($tag));
+        printf "%-*.*s %-19.19s $date", $sha1len, $sha1len, $tag, $author;
         print ansic(0);
     }
     else {
