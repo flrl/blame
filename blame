@@ -6,6 +6,8 @@ use strict;
 
 use open ':encoding(UTF-8)';
 
+use Date::Format;
+
 sub ansic
 {
     return "\033["
@@ -22,20 +24,8 @@ sub commit_colour
     return (38, 5, 17 + hex(substr($sha1, $c0, 16)) % 214);
 }
 
-sub tag_colour
-{
-    my ($tag) = @_;
-
-    # djb2
-    my $hash = 5381;
-    foreach my $c (split q{}, $tag) {
-        $hash = ($hash * 33 + ord $c) % 4294967296;
-    }
-
-    return (38, 5, 17 + $hash % 214);
-}
-
 my %tagcache;
+my %commits;
 
 open(my $gtpipe, '-|',
         'git', 'tag', '-l', '--format=%(objectname) %(refname:lstrip=2)')
@@ -47,9 +37,6 @@ while (<$gtpipe>) {
 }
 close $gtpipe;
 
-open(my $blame, '-|', 'git', 'blame', '--abbrev=40', @ARGV)
-    or die "cannot exec git blame: $!";
-
 my $pager = $ENV{GIT_PAGER} // $ENV{PAGER};
 if (-t STDOUT and $pager) {
     $ENV{LESS} //= 'FRSX';
@@ -59,27 +46,44 @@ if (-t STDOUT and $pager) {
     select $out;
 }
 
-my $sha1len;
+open(my $blame, '-|', 'git', 'blame', '--porcelain', @ARGV)
+    or die "cannot exec git blame: $!";
+
+my ($sha1, $lineno);
 while (<$blame>) {
-    my ($sha1, $author, $date, $space, $lineno, $line) =
-        split /\s\((.*?)\s*(\d\d\d\d-\d\d-\d\d \d\d:\d\d:\d\d [-+]\d\d\d\d)(\s+)(\d+)\)/, $_, 2;
+    if (m{^
+          ([0-9a-zA-Z]{40})     # sha1
+          \s \d+                # original line number
+          \s (\d+)              # current line number
+          (?: \s \d+ )?         # consecutive lines from this commit
+          $}x)
+    {
+        # header
+        ($sha1, $lineno) = ($1, $2);
+    }
+    elsif (m{^ \t (.*) $}x) {
+        # it's actually the line, print it out?
+        # FIXME don't know how many columns to allow for line number though...
 
-    $sha1len //= length $sha1;
+        my $line = $1;
+        my $tag = $tagcache{$sha1};
+        my $date = time2str('%Y-%m-%d %H:%M:%S %z',
+                            $commits{$sha1}->{'author-time'},
+                            $commits{$sha1}->{'author-tz'});
+        my $author = $commits{$sha1}->{'author'};
 
-    my $tag = $tagcache{$sha1} // q{};
-
-    if ($tag) {
-        print ansic(tag_colour($tag));
-        printf "%-*.*s %-19.19s $date", $sha1len, $sha1len, $tag, $author;
+        print ansic(commit_colour($sha1));
+        printf "%-12.12s %-19.19s %s", $tag // $sha1, $author, $date;
         print ansic(0);
+
+        print " ";
+        print ansic(38,5,240), $lineno, ') ', ansic(0);
+        print $line, "\n";
     }
     else {
-        print ansic(commit_colour($sha1));
-        printf "$sha1 %-19.19s $date", $author;
-        print ansic(0);
+        # header metadata
+        chomp;
+        my ($key, $value) = split /\s/, $_, 2;
+        $commits{$sha1}->{$key} = $value;
     }
-
-    print $space;
-    print ansic(38,5,240), $lineno, ')', ansic(0);
-    print $line;
 }
