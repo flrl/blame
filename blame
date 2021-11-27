@@ -65,7 +65,12 @@ while (<$blame>) {
         $tag = $tagcache{$sha1};
         if (not defined $tag) {
             if ($sha1 !~ m/^0+$/) {
-                ($tag) = qx(git tag -l $tag_pattern --sort=v:refname --contains $sha1);
+                if ($tag_pattern) {
+                    ($tag) = qx(git tag -l $tag_pattern --sort=v:refname --contains $sha1);
+                }
+                else {
+                    ($tag) = qx(git tag --sort=v:refname --contains $sha1);
+                }
                 $tag //= q{};
                 chomp $tag;
                 $tagcache{$sha1} = $tag;
