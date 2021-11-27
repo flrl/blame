@@ -4,6 +4,8 @@
 use warnings;
 use strict;
 
+use open ':encoding(UTF-8)';
+
 sub ansic
 {
     return "\033["
