@@ -55,11 +55,15 @@ if (-t STDOUT and $pager) {
 }
 
 my %tagcache;
+my %newtagcache;
+my $sha1len;
 while (<$blame>) {
     my ($sha1, $author, $date, $space, $lineno, $line) =
         split /\s\((.*?)\s*(\d\d\d\d-\d\d-\d\d \d\d:\d\d:\d\d [-+]\d\d\d\d)(\s+)(\d+)\)/, $_, 2;
 
-    my $tag;
+    $sha1len //= length $sha1;
+
+    my ($tag, $committag);
 
     if ($want_tags) {
         $tag = $tagcache{$sha1};
@@ -82,9 +86,30 @@ while (<$blame>) {
         }
     }
 
-    print ansic(commit_colour($sha1));
-    printf "$sha1 %-19.19s $date", $author;
-    print ansic(0);
+    $committag = $newtagcache{$sha1};
+    if (not defined $committag) {
+        if ($sha1 !~ m/^0+$/) {
+            ($committag) = qx(git tag --points-at $sha1);
+            $committag //= q{};
+            chomp $committag;
+            $newtagcache{$sha1} = $committag;
+        }
+        else {
+            # won't be able to find tags for uncommitted lines...
+            $newtagcache{$sha1} = $committag = q{};
+        }
+    }
+
+    if ($committag) {
+        print ansic(tag_colour($committag));
+        printf "%-*.*s %-19.19s $date", $sha1len, $sha1len, $committag, $author;
+        print ansic(0);
+    }
+    else {
+        print ansic(commit_colour($sha1));
+        printf "$sha1 %-19.19s $date", $author;
+        print ansic(0);
+    }
 
     if ($want_tags) {
         print ansic(tag_colour($tag));
