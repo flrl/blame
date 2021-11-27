@@ -26,7 +26,9 @@ sub commit_colour
 
 my %tagcache;
 my %commits;
+my @lines;
 
+# load and cache tags
 open(my $gtpipe, '-|',
         'git', 'tag', '-l', '--format=%(objectname) %(refname:lstrip=2)')
     or die "cannot exec git tag: $!";
@@ -37,18 +39,9 @@ while (<$gtpipe>) {
 }
 close $gtpipe;
 
-my $pager = $ENV{GIT_PAGER} // $ENV{PAGER};
-if (-t STDOUT and $pager) {
-    $ENV{LESS} //= 'FRSX';
-
-    open(my $out, '|-', $pager)
-        or die "cannot exec $pager: $!";
-    select $out;
-}
-
+# read and parse blame data
 open(my $blame, '-|', 'git', 'blame', '--porcelain', @ARGV)
     or die "cannot exec git blame: $!";
-
 my ($sha1, $lineno);
 while (<$blame>) {
     if (m{^
@@ -62,23 +55,10 @@ while (<$blame>) {
         ($sha1, $lineno) = ($1, $2);
     }
     elsif (m{^ \t (.*) $}x) {
-        # it's actually the line, print it out?
-        # FIXME don't know how many columns to allow for line number though...
+        # actually the line
 
         my $line = $1;
-        my $tag = $tagcache{$sha1};
-        my $date = time2str('%Y-%m-%d %H:%M:%S %z',
-                            $commits{$sha1}->{'author-time'},
-                            $commits{$sha1}->{'author-tz'});
-        my $author = $commits{$sha1}->{'author'};
-
-        print ansic(commit_colour($sha1));
-        printf "%-12.12s %-19.19s %s", $tag // $sha1, $author, $date;
-        print ansic(0);
-
-        print " ";
-        print ansic(38,5,240), $lineno, ') ', ansic(0);
-        print $line, "\n";
+        push @lines, { sha1 => $sha1, lineno => $lineno, line => $line };
     }
     else {
         # header metadata
@@ -86,4 +66,34 @@ while (<$blame>) {
         my ($key, $value) = split /\s/, $_, 2;
         $commits{$sha1}->{$key} = $value;
     }
+}
+close $blame;
+
+# about to output, open a pager
+my $pager = $ENV{GIT_PAGER} // $ENV{PAGER};
+if (-t STDOUT and $pager) {
+    $ENV{LESS} //= 'FRSX';
+
+    open(my $out, '|-', $pager)
+        or die "cannot exec $pager: $!";
+    select $out;
+}
+
+my $lineno_width = 1 + length scalar @lines;
+foreach (@lines) {
+    my ($sha1, $lineno, $line) = @{$_}{'sha1', 'lineno', 'line'};
+
+    my $tag = $tagcache{$sha1};
+    my $date = time2str('%Y-%m-%d %H:%M:%S %z',
+                        $commits{$sha1}->{'author-time'},
+                        $commits{$sha1}->{'author-tz'});
+    my $author = $commits{$sha1}->{'author'};
+
+    print ansic(commit_colour($sha1));
+    printf '%-12.12s %-19.19s %s', $tag // $sha1, $author, $date;
+
+    print ansic(38,5,240);
+    printf '%*d ', $lineno_width, $lineno;
+    print ansic(0);
+    print $line, "\n";
 }
